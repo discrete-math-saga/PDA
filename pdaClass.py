@@ -2,12 +2,18 @@ import re
 import cfg
 from typing import NamedTuple
 
+
 class TR(NamedTuple):
+    """
+    NPDAをCFGへ変換する際に、使う
+    [fSt] fとtなNPDAの状態、SはStack文字
+    を保持するクラス
+    """
     f:str
     S:str|None
     t:str|None
 
-    def __str__(self):
+    def __str__(self) -> str:
         s =f'[{self.f}{self.S}{self.t}]'
         if self.f == self.S and self.f == self.t:
             s = f'{self.f}'
@@ -21,7 +27,7 @@ class DPDA:
     決定性プッシュダウンオートマトン
     """
     
-    def __init__(self, q_0 : str, delta : dict[tuple[str,str,str],tuple[str,list[str]]], F : set[str], Z_0 :str):
+    def __init__(self, q_0 : str, delta : dict[tuple[str,str,str],tuple[str,list[str]]], F : set[str], Z_0 :str) -> None:
         """
         Constructor
 
@@ -255,7 +261,7 @@ class NPDA(DPDA):
     """
     非決定性プッシュダウンオートマトン
     """
-    def __init__(self, q_0 : str, delta : dict[tuple[str,str,str],list[tuple[str,list[str]]]], F : set[str], Z_0 :str):
+    def __init__(self, q_0 : str, delta : dict[tuple[str,str,str],list[tuple[str,list[str]]]], F : set[str], Z_0 :str) -> None:
         """
         Constructor
 
@@ -293,7 +299,7 @@ class NPDA(DPDA):
         self._alphabet = alphabet
         self._stackAlphabet = stackAlphabet
 
-    def read(self, input : str, latex = False):
+    def read(self, input : str, latex = False) -> list[tuple[bool, str, list[str]]]:
         q = self._q_0
         sequence:list[str] = list()#状態遷移を記録するリスト
         sequenceList:list[tuple[bool,str,list[str]]] = list()
@@ -390,13 +396,17 @@ class NPDA(DPDA):
         return text
 
     def toCfg(self) -> cfg.CFG:
+        """
+        Greibach標準形CFGへの変換
+        """
         P:dict[TR,list[list[TR]]] = dict()
         # 初期の規則
         S = TR('S','S','S')
         P[S] = list()
         for q in self._states:
             P[S].append([TR(self._q_0, self._Z_0, q)])
-
+        
+        #遷移関数の生成規則へと変換
         for k in self._delta.keys():#各遷移関数の要素
             (q, a, A) = k#遷移関数の変数、状態q、アルファベットa、スタックアルファベットA
             for v in self._delta[k]:
@@ -414,7 +424,7 @@ class NPDA(DPDA):
                         pushListDummy = list(pushList)
                         self._push2N(key, [TR(a,None,None)], P[key], q1, qLast,pushListDummy,P)
         self._temporaryP = P
-        tKeys = NPDA._findUnterminated(P,S)
+        tKeys = NPDA._removeUnterminated(P,S)
         # pprint.pprint(P)
         PP = NPDA._createNewP(P,tKeys)
 
@@ -447,13 +457,17 @@ class NPDA(DPDA):
         return PP
     
     @staticmethod
-    def _findUnterminated(P:dict[TR,list[list[TR]]],S:TR):
+    def _removeUnterminated(P:dict[TR,list[list[TR]]],S:TR) -> set[TR]:
+        """
+        生成規則の左辺の非終端記号からから終端記号くものだけを残す
+        """
+        #生成規則のダミーを作る
         PP:dict[TR,list[list[TR]]] = NPDA._copyP(P)
         keys = PP.keys()
         tKeys:set[TR] = set()
-        tKeys.add(S)
+        tKeys.add(S)#開始記号は登録する
         while True:
-            for k in keys:#終端記号だけのものを抽出
+            for k in keys:#右辺が終端記号だけのものを抽出
                 lList  = PP[k]
                 terminate = False
                 for dl in lList:
@@ -461,11 +475,12 @@ class NPDA(DPDA):
                         terminate = True
                     if (len(dl)==1) and (dl[0].S is None):
                         terminate = True
-                if terminate:
+                if terminate:#終端記号を導くものを登録する
                     tKeys.add(k)
-                    PP[k]=[[]]
+                    PP[k]=[[]]#ダミー生成規則の右辺の空にする
             # pprint.pprint(PP)
             find = False
+            #まだ、終端記号へと至ると分からない記号を確認
             for k in keys:
                 if not (k in tKeys):
                     dList = PP[k]
@@ -475,12 +490,13 @@ class NPDA(DPDA):
                             if kt in dl:
                                 dl.remove(kt)
                         if (len(dl)==1) and (dl[0].S is None):
+                            #右辺には全て終端記号へ至る非終端記号
                             PP[k]=[[]]
                             tKeys.add(k)
                             find=True
                     
-            if not find:
-                break
+            if not find:#新たな終端記号を導く非終端記号は見つからない
+                break#終了
 
         return tKeys
 
@@ -498,9 +514,9 @@ class NPDA(DPDA):
                 for dList in P[kk]:
                     accept=True
                     for d in dList:
-                        if d.S and (not (d in tKeys)):
+                        if d.S and (not (d in tKeys)):#右辺に終端記号至らない記号がある
                             accept = False
-                    if accept:
+                    if accept:#終端記号を導く場合も生成規則として記録
                         tmpList:list[str]=list()
                         for d in dList:
                             tmpList.append(str(d))
