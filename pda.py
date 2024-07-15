@@ -1,13 +1,13 @@
 import re
-import cfg
+from cfg import CFG
+from stack import Stack
 from typing import NamedTuple
 
 
 class TR(NamedTuple):
     """
-    NPDAをCFGへ変換する際に、使う
-    [fSt] fとtなNPDAの状態、SはStack文字
-    を保持するクラス
+    This is used when converting NPDA to CFG.
+    [fst]: f and t of NPDA, s is Stack character
     """
     f:str
     S:str|None
@@ -24,7 +24,7 @@ class TR(NamedTuple):
 
 class DPDA:
     """
-    決定性プッシュダウンオートマトン
+    Deterministic Pushdown Automaton
     """
     
     def __init__(self, q_0 : str, delta : dict[tuple[str,str,str],tuple[str,list[str]]], F : set[str], Z_0 :str) -> None:
@@ -33,13 +33,13 @@ class DPDA:
 
         Parameters
         ---
-        q_0 初期状態
+        q_0 Initial state
 
-        delta 遷移関数
+        delta Transition function
 
-        F 受理状態
+        F Acceptance state
         
-        Z_0 スタック底の記号
+        Z_0 Stack bottom symbol
         """
         self._q_0: str = q_0
         self._delta: dict[tuple[str, str, str], tuple[str, list[str]]] = delta
@@ -65,36 +65,37 @@ class DPDA:
 
     def read(self, input : str, latex = False) -> tuple[bool, str, list[str]]:
         """
-        入力に対する動作
+        Process an input
 
         Parameters
         ---
-        input 入力文字列
+        input Input string
 
-        latex LaTeX形式のオン・オフ
+        latex True if the output is in LaTeX format
 
+        
         Returns
         ---
         (result,message,sequence)
 
-        result 受理の有無
+        result True if the input is accepted
 
-        message 説明
+        message Message for the result
 
-        sequence 遷移列
+        sequence Sequence of state transitions
         """
         q: str = self._q_0
-        sequence = list()#状態遷移を記録するリスト
-        stack = list()
-        stack.append(self._Z_0)
+        sequence:list[str] = list()#Sequence of state transitions
+        stack:Stack[str] = Stack()
+        stack.push(self._Z_0)
         return self._readSub(q,input,sequence,stack,latex)
 
-    def _readSub(self, q : str, inputStr : str, sequence : list[str], stack : list[str], latex:bool) -> tuple[bool, str, list[str]]:
+    def _readSub(self, q : str, inputStr : str, sequence : list[str], stack : Stack[str], latex:bool) -> tuple[bool, str, list[str]]:
         """
-        入力に対する再帰的メソッド
+        Recursive method for input
         """
-        if len(inputStr) == 0:#入力が空になった
-            if len(stack) == 0:#stackも空になった
+        if len(inputStr) == 0:# No more input
+            if stack.is_empty():# stack is empty
                 ss = DPDA._mkStr(q,sequence,inputStr,stack,latex)
                 sequence.append(ss)
                 message = 'accepted'
@@ -103,7 +104,7 @@ class DPDA:
                     message = f'stop at {q}'
                     result = False
                 return result,message,sequence
-            else:#stackに文字が残っている
+            else:# stack is not empty
                 ss: str = DPDA._mkStr(q,sequence,inputStr,stack,latex)
                 sequence.append(ss)
                 g: str = stack.pop()
@@ -116,7 +117,7 @@ class DPDA:
                 DPDA._stackPush(Z,stack)
                 return self._readSub(q,inputStr,sequence,stack,latex)
         
-        if len(stack) == 0:#stackも空になった
+        if stack.is_empty():# stack is empty
             ss = DPDA._mkStr(q,sequence,inputStr,stack,latex)
             sequence.append(ss)
             message = 'vacant stack'
@@ -191,7 +192,7 @@ class DPDA:
         return '\\'+re.sub(r'text{(\S+)_(\S+)}',r'text{\1}_{\2}',s)
 
     @staticmethod
-    def _mkStr(q:str,sequence:list[str],inputStr:str,stack,latex) -> str:
+    def _mkStr(q:str,sequence:list[str],inputStr:str,stack:Stack[str],latex:bool) -> str:
         ss:str = ''
         if len(sequence) > 0:
             if latex:
@@ -208,12 +209,11 @@ class DPDA:
         return ss
 
     @staticmethod
-    def _mkStackStr(stack:list[str],latex:bool) -> str:
-        reversedStack:list[str] = list(stack)
-        reversedStack.reverse()
+    def _mkStackStr(stack:Stack[str],latex:bool) -> str:
+        reversedStack:Stack[str] = stack.reversed()
         if latex:
-            if len(reversedStack) > 0:
-                ss:str = "".join(reversedStack)
+            if not reversedStack.is_empty():
+                # ss:str = "".join(reversedStack)
                 s:str = f'{reversedStack}'
 #                s = f'\\text{{{ss}}}'
             else:
@@ -223,10 +223,10 @@ class DPDA:
         return s
 
     @staticmethod
-    def _stackPush(Z,stack) -> None:
+    def _stackPush(Z:list[str],stack:Stack[str]) -> None:
         ZZ = list(reversed(Z))
         for z in ZZ:
-            stack.append(z)
+            stack.push(z)
 
     @property
     def states(self) -> set[str]:
@@ -259,7 +259,7 @@ class DPDA:
 ################################################################
 class NPDA(DPDA):
     """
-    非決定性プッシュダウンオートマトン
+    Non-deterministic Pushdown Automaton
     """
     def __init__(self, q_0 : str, delta : dict[tuple[str,str,str],list[tuple[str,list[str]]]], F : set[str], Z_0 :str) -> None:
         """
@@ -267,21 +267,21 @@ class NPDA(DPDA):
 
         Parameters
         ---
-        q_0 初期状態
+        q_0 Initial state
 
-        delta 遷移関数
+        delta Transition function
 
-        F 受理状態
+        F Acceptance state
         
-        Z_0 スタック底の記号
+        Z_0 Stack bottom symbol
         """
-        self._q_0 = q_0
+        self._q_0:str = q_0
         self._delta: dict[tuple[str,str,str],list[tuple[str,list[str]]]] = delta
-        self._F = F
-        self._Z_0 = Z_0
-        states = set()
-        alphabet = set()
-        stackAlphabet = set()
+        self._F: set[str] = F
+        self._Z_0: str = Z_0
+        states: set[str] = set()
+        alphabet: set[str] = set()
+        stackAlphabet: set[str] = set()
         for f in delta:
             (q,a,g) = f
             states.add(q)
@@ -295,34 +295,34 @@ class NPDA(DPDA):
                     for gg in l:
                         stackAlphabet.add(gg)
 
-        self._states = states
-        self._alphabet = alphabet
-        self._stackAlphabet = stackAlphabet
+        self._states: set[str] = states
+        self._alphabet: set[str] = alphabet
+        self._stackAlphabet: set[str] = stackAlphabet
 
     def read(self, input : str, latex = False) -> list[tuple[bool, str, list[str]]]:
-        q = self._q_0
-        sequence:list[str] = list()#状態遷移を記録するリスト
-        sequenceList:list[tuple[bool,str,list[str]]] = list()
-        stack:list[str] = list()
-        stack.append(self._Z_0)
+        q: str = self._q_0
+        sequence: list[str] = list()#Sequence of state transitions
+        sequenceList: list[tuple[bool,str,list[str]]] = list()
+        stack: Stack[str] = Stack()
+        stack.push(self._Z_0)
         self._readSub(q,input,sequence,stack,sequenceList, latex)
         return sequenceList
 
     #再帰的の文字を読む
-    def _readSub(self, q:str, inputStr:str, sequence:list[str],stack:list[str], sequenceList:list[tuple[bool,str,list[str]]], latex:bool) -> None:
-        if len(inputStr) == 0:#入力が空になった
-            if len(stack) == 0:#stackも空になった
+    def _readSub(self, q:str, inputStr:str, sequence:list[str],stack:Stack[str], sequenceList:list[tuple[bool,str,list[str]]], latex:bool) -> None:
+        if len(inputStr) == 0:#No more  input
+            if stack.is_empty():#stack is empty
                 ss = DPDA._mkStr(q,sequence,inputStr,stack,latex)
                 sequence.append(ss)
                 message = 'accepted'
                 result = True
-                if len(self._F) > 0:#終状態が定義されている場合
+                if len(self._F) > 0:# Acceptance states are defined
                     if q not in self._F:
                         message = f'stop at {q}'
                         result = False
                 sequenceList.append((result,message,sequence))
                 return
-            else:#stackに文字が残っている
+            else:# stack is not empty
                 ss = DPDA._mkStr(q,sequence,inputStr,stack,latex)
                 sequence.append(ss)
                 g = stack.pop()
@@ -335,12 +335,12 @@ class NPDA(DPDA):
                 for o in self._delta[f]:
                     (q,Z) = o
                     newSequence = list(sequence)
-                    newStack = list(stack)
+                    newStack = Stack(stack)
                     DPDA._stackPush(Z,newStack)
                     self._readSub(q,inputStr,newSequence,newStack,sequenceList,latex)
                 return
         
-        if len(stack) == 0:#stackも空になった
+        if stack.is_empty():# stack is empty
             ss = DPDA._mkStr(q,sequence,inputStr,stack,latex)
             sequence.append(ss)
             message = 'vacant stack'
@@ -361,7 +361,7 @@ class NPDA(DPDA):
         for o in self._delta[f]:
             (q,Z) = o
             newSequence = list(sequence)
-            newStack = list(stack)
+            newStack = Stack(stack)
             DPDA._stackPush(Z,newStack)
             self._readSub(q,inputStr[1:],newSequence,newStack,sequenceList,latex)
 
@@ -395,23 +395,23 @@ class NPDA(DPDA):
             text += '}\\\\\n'
         return text
 
-    def toCfg(self) -> cfg.CFG:
+    def toCfg(self) -> CFG:
         """
-        Greibach標準形CFGへの変換
+        Convert this NPDA to CFG in Greibach normal form
         """
         P:dict[TR,list[list[TR]]] = dict()
-        # 初期の規則
+        # Initial rule
         S = TR('S','S','S')
         P[S] = list()
         for q in self._states:
             P[S].append([TR(self._q_0, self._Z_0, q)])
         
-        #遷移関数の生成規則へと変換
-        for k in self._delta.keys():#各遷移関数の要素
-            (q, a, A) = k#遷移関数の変数、状態q、アルファベットa、スタックアルファベットA
+        # Convert transition functions to production rules
+        for k in self._delta.keys():# an element of transition functions
+            (q, a, A) = k# variables of transition functions, state q, alphabet a, stack alphabet A
             for v in self._delta[k]:
-                (q1, pushList) = v#遷移先の状態q1、スタックへプッシュするアルファベット列pushList
-                if len(pushList) == 0:#スタックへ書かない場合
+                (q1, pushList) = v# destination state q1, stack push list pushList
+                if len(pushList) == 0:# if pushList is empty
                     key = TR(q, A, q1)
                     if not (key in P.keys()):
                         P[key]=list()
@@ -427,9 +427,7 @@ class NPDA(DPDA):
         tKeys = NPDA._removeUnterminated(P,S)
         # pprint.pprint(P)
         PP = NPDA._createNewP(P,tKeys)
-
-
-        return cfg.CFG(PP,str(S))
+        return CFG(PP,str(S))
 
 
     def _push2N(self, k:TR, output:list[TR], outputList:list[list[TR]], q:str, qLast:str, pushList:list[str],P:dict[TR,list[list[TR]]]) -> None:

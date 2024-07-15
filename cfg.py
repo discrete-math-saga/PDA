@@ -1,7 +1,7 @@
-from pdaClass import NPDA
+from pda import NPDA
 class CFG:
     """
-    文脈自由文法: Greibach標準形
+    Context Free Grammar: Greibach Normal Form
     """
 
     def __init__(self, P:dict[str,list[list[str]]], S:str):
